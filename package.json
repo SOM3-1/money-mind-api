@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Skipping tests\""
+    "test": "echo \"Skipping tests\"",
+    "start": "node firebase-services.js"
   },
   "keywords": [],
   "author": "",
