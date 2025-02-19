@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Skipping tests\"",
-    "start": "node firebase-services.js"
+    "start": "node firebase-services.js",
+    "dev": "nodemon firebase-services.js"
   },
   "keywords": [],
   "author": "",

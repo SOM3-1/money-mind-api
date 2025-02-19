@@ -159,42 +159,141 @@ app.delete("/budgets/:budgetId", async (req, res) => {
   }
 });
 
-// ---------- TRANSACTION API ----------
-
-// Create a transaction & update budget-transactions
-app.post("/transactions", async (req, res) => {
+// Get all budgets for a user
+app.get("/budgets", async (req, res) => {
   try {
-    const { userId, transactionId, amount, description, date, category } = req.body;
-    if (!userId || !transactionId || !amount || !description || !date || !category) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: "Missing userId" });
 
-    const transactionRef = db.collection("transactions").doc(transactionId);
-    await transactionRef.set({ userId, amount, description, date, category });
-
-    // Find the relevant budget
     const budgetsSnapshot = await db.collection("budgets")
       .where("userId", "==", userId)
-      .where("fromDate", "<=", date)
-      .where("toDate", ">=", date)
+      .orderBy("fromDate", "desc")
       .get();
 
-    if (!budgetsSnapshot.empty) {
-      const budgetId = budgetsSnapshot.docs[0].id;
-      const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
-      const budgetTxnDoc = await budgetTxnRef.get();
-      if (budgetTxnDoc.exists) {
-        const categoryTotals = budgetTxnDoc.data().categoryTotals;
-        categoryTotals[category] += amount;
-        await budgetTxnRef.update({ categoryTotals });
-      }
-    }
+    const budgets = budgetsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    res.status(201).json({ id: transactionId, userId, amount, description, date, category });
+    res.status(200).json(budgets);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+// ---------- TRANSACTION API ----------
+
+// Create a transaction & update budget-transactions
+// app.post("/transactions", async (req, res) => {
+//   try {
+//     const { transactions } = req.body; // Expecting an array of transaction objects
+
+//     if (!Array.isArray(transactions) || transactions.length === 0) {
+//       return res.status(400).json({ error: "Transactions array is required" });
+//     }
+
+//     const batch = db.batch();
+//     const budgetUpdates = {}; 
+
+//     for (const txn of transactions) {
+//       const { userId, transactionId, amount, description, date, category } = txn;
+
+//       if (!userId || !transactionId || !amount || !description || !date || !category) {
+//         return res.status(400).json({ error: "Missing required fields in transaction" });
+//       }
+
+//       const transactionRef = db.collection("transactions").doc(transactionId);
+//       batch.set(transactionRef, { userId, amount, description, date, category });
+
+//       const budgetsSnapshot = await db.collection("budgets")
+//         .where("userId", "==", userId)
+//         .where("fromDate", "<=", date)
+//         .where("toDate", ">=", date)
+//         .get();
+
+//       if (!budgetsSnapshot.empty) {
+//         const budgetId = budgetsSnapshot.docs[0].id;
+//         const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
+
+//         if (!budgetUpdates[budgetId]) {
+//           const budgetTxnDoc = await budgetTxnRef.get();
+//           budgetUpdates[budgetId] = budgetTxnDoc.exists ? budgetTxnDoc.data().categoryTotals : {};
+//         }
+//         budgetUpdates[budgetId][category] = (budgetUpdates[budgetId][category] || 0) + amount;
+//       }
+//     }
+
+//     await batch.commit();
+
+//     const budgetTxnBatch = db.batch();
+//     for (const [budgetId, categoryTotals] of Object.entries(budgetUpdates)) {
+//       const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
+//       budgetTxnBatch.set(budgetTxnRef, { categoryTotals }, { merge: true });
+//     }
+
+//     await budgetTxnBatch.commit();
+
+//     res.status(201).json({ message: "Transactions added successfully and budgets updated" });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+app.post("/transactions", async (req, res) => {
+  try {
+    const { transactions } = req.body;
+
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      return res.status(400).json({ error: "Transactions array is required" });
+    }
+
+    const batch = db.batch();
+    const budgetUpdates = {};
+
+    for (const txn of transactions) {
+      const { userId, transactionId, amount, description, date, category } = txn;
+
+      if (!userId || !transactionId || !amount || !description || !date || !category) {
+        return res.status(400).json({ error: `Missing required fields in transaction: ${JSON.stringify(txn)}` });
+      }
+
+      const transactionRef = db.collection("transactions").doc(transactionId);
+
+      batch.set(transactionRef, { userId, amount, description, date, category }, { merge: true });
+
+      const budgetsSnapshot = await db.collection("budgets")
+        .where("userId", "==", userId)
+        .where("fromDate", "<=", date)
+        .where("toDate", ">=", date)
+        .get();
+
+      if (!budgetsSnapshot.empty) {
+        const budgetId = budgetsSnapshot.docs[0].id;
+        const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
+
+        if (!budgetUpdates[budgetId]) {
+          const budgetTxnDoc = await budgetTxnRef.get();
+          budgetUpdates[budgetId] = budgetTxnDoc.exists ? budgetTxnDoc.data().categoryTotals : {};
+        }
+
+        budgetUpdates[budgetId][category] = (budgetUpdates[budgetId][category] || 0) + amount;
+      }
+    }
+
+    await batch.commit();
+
+    const budgetTxnBatch = db.batch();
+    for (const [budgetId, categoryTotals] of Object.entries(budgetUpdates)) {
+      const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
+      budgetTxnBatch.set(budgetTxnRef, { categoryTotals }, { merge: true });
+    }
+
+    await budgetTxnBatch.commit();
+
+    res.status(201).json({ message: "Transactions synced successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
 
 // Update transaction category & update budget-transactions
 app.patch("/transactions/:transactionId", async (req, res) => {
