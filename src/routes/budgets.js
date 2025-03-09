@@ -65,7 +65,15 @@ router.post("/", async (req, res) => {
     });
 
     await budgetRef.set({ userId, amount, title, fromDate, toDate });
-    await db.collection("budget-transactions").doc(budgetId).set({ userId, budgetId, categoryTotals });
+    await db.collection("budget-transactions").doc(budgetId).set({
+      userId, 
+      budgetId,
+      title,
+      amount,
+      fromDate,
+      toDate, 
+      categoryTotals
+    });
 
     res.status(201).json({ id: budgetId, amount, title, fromDate, toDate, categoryTotals });
   } catch (error) {
@@ -137,7 +145,13 @@ router.patch("/:budgetId", async (req, res) => {
       categoryTotals[txn.category] += txn.amount;
     });
 
-    await db.collection("budget-transactions").doc(budgetId).update({ categoryTotals });
+    await db.collection("budget-transactions").doc(budgetId).update({
+      title: updates.title || oldBudget.title,
+      amount: updates.amount || oldBudget.amount,
+      fromDate: updates.fromDate || oldBudget.fromDate,
+      toDate: updates.toDate || oldBudget.toDate,
+      categoryTotals
+    });
 
     res.status(200).json({ message: "Budget updated successfully" });
   } catch (error) {
