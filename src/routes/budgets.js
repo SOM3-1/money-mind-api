@@ -61,7 +61,7 @@ router.post("/", async (req, res) => {
 
     transactionsSnapshot.forEach(doc => {
       const txn = doc.data();
-      categoryTotals[txn.category] += txn.amount;
+      categoryTotals[txn.category] += parseFloat(txn.amount.toFixed(2));
     });
 
     await budgetRef.set({ userId, amount, title, fromDate, toDate });
@@ -69,7 +69,7 @@ router.post("/", async (req, res) => {
       userId, 
       budgetId,
       title,
-      amount,
+      amount: parseFloat(amount.toFixed(2)),
       fromDate,
       toDate, 
       categoryTotals
@@ -142,12 +142,12 @@ router.patch("/:budgetId", async (req, res) => {
     const categoryTotals = Object.fromEntries(CATEGORY_LIST.map(cat => [cat, 0]));
     transactionsSnapshot.forEach(doc => {
       const txn = doc.data();
-      categoryTotals[txn.category] += txn.amount;
+      categoryTotals[txn.category] += parseFloat(txn.amount.toFixed(2));
     });
 
     await db.collection("budget-transactions").doc(budgetId).update({
       title: updates.title || oldBudget.title,
-      amount: updates.amount || oldBudget.amount,
+      amount: parseFloat(updates.amount).toFixed(2) || parseFloat(oldBudget.amount).toFixed(2),
       fromDate: updates.fromDate || oldBudget.fromDate,
       toDate: updates.toDate || oldBudget.toDate,
       categoryTotals

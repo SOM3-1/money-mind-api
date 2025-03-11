@@ -115,7 +115,7 @@ router.post("/", async (req, res) => {
 
             const transactionRef = db.collection("transactions").doc(transactionId);
 
-            batch.set(transactionRef, { userId, amount, description, date, category }, { merge: true });
+            batch.set(transactionRef, { userId, amount: parseFloat(amount.toFixed(2)), description, date, category }, { merge: true });
 
             const budgetsSnapshot = await db.collection("budgets")
                 .where("userId", "==", userId)
@@ -132,7 +132,7 @@ router.post("/", async (req, res) => {
                     budgetUpdates[budgetId] = budgetTxnDoc.exists ? budgetTxnDoc.data().categoryTotals : {};
                 }
 
-                budgetUpdates[budgetId][category] = (budgetUpdates[budgetId][category] || 0) + amount;
+                budgetUpdates[budgetId][category] = parseFloat(((budgetUpdates[budgetId][category] || 0) + amount).toFixed(2));
             }
         }
 
@@ -207,8 +207,12 @@ router.patch("/:transactionId", async (req, res) => {
             const budgetTxnDoc = await budgetTxnRef.get();
             if (budgetTxnDoc.exists) {
                 const categoryTotals = budgetTxnDoc.data().categoryTotals;
-                categoryTotals[txnData.category] -= txnData.amount;
-                categoryTotals[category] += txnData.amount;
+                categoryTotals[txnData.category] = parseFloat(
+                    ((categoryTotals[txnData.category] || 0) - txnData.amount).toFixed(2)
+                );
+                categoryTotals[category] = parseFloat(
+                    ((categoryTotals[category] || 0) + txnData.amount).toFixed(2)
+                );
                 await budgetTxnRef.update({ categoryTotals });
             }
         }
@@ -259,7 +263,7 @@ router.delete("/:transactionId", async (req, res) => {
             const budgetId = budgetsSnapshot.docs[0].id;
             const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
             const categoryTotals = (await budgetTxnRef.get()).data().categoryTotals;
-            categoryTotals[category] -= amount;
+            categoryTotals[category] = ((categoryTotals[category] || 0) - amount).toFixed(2);
             await budgetTxnRef.update({ categoryTotals });
         }
 
@@ -312,7 +316,7 @@ router.get("/", async (req, res) => {
         if (!userId) return res.status(400).json({ error: "Missing userId" });
 
         const transactionsSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
-        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), amount: parseFloat(doc.data().amount.toFixed(2)) }));
 
         res.status(200).json(transactions);
     } catch (error) {
@@ -361,7 +365,7 @@ router.get("/by-budget", async (req, res) => {
             .where("date", "<=", toDate)
             .get();
 
-        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), amount: parseFloat(doc.data().amount.toFixed(2)) }));
 
         res.status(200).json(transactions);
     } catch (error) {
