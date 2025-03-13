@@ -1,5 +1,6 @@
 const express = require("express");
 const { db } = require("../../firebaseConfig");
+const admin = require("firebase-admin"); 
 
 const router = express.Router();
 
@@ -41,8 +42,8 @@ router.get("/", async (req, res) => {
     }
 
     const users = usersSnapshot.docs.map(doc => ({
-      id: doc.id, 
-      ...doc.data() 
+      id: doc.id,
+      ...doc.data()
     }));
 
     res.status(200).json(users);
@@ -103,4 +104,66 @@ router.get("/:userId", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+* @swagger
+* /users/{userId}:
+*   delete:
+*     summary: Delete a user account
+*     description: Deletes the user from Firebase Authentication and removes all their associated data from Firestore.
+*     parameters:
+*       - in: path
+*         name: userId
+*         required: true
+*         schema:
+*           type: string
+*         description: The Firebase Authentication UID of the user.
+*     responses:
+*       200:
+*         description: User account deleted successfully.
+*       404:
+*         description: User not found.
+*       500:
+*         description: Internal server error.
+*/
+router.delete("/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID is required" });
+    }
+
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await admin.auth().deleteUser(userId);
+
+    await userRef.delete();
+
+    const transactionsSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
+    const transactionBatch = db.batch();
+    transactionsSnapshot.forEach((doc) => transactionBatch.delete(doc.ref));
+    await transactionBatch.commit();
+
+    const budgetsSnapshot = await db.collection("budgets").where("userId", "==", userId).get();
+    const budgetBatch = db.batch();
+    budgetsSnapshot.forEach((doc) => budgetBatch.delete(doc.ref));
+    await budgetBatch.commit();
+
+    const budgetTxnSnapshot = await db.collection("budget-transactions").where("userId", "==", userId).get();
+    const budgetTxnBatch = db.batch();
+    budgetTxnSnapshot.forEach((doc) => budgetTxnBatch.delete(doc.ref));
+    await budgetTxnBatch.commit();
+
+    res.status(200).json({ message: "User account and all associated data deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting user account:", error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

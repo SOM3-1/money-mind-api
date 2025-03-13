@@ -9,7 +9,6 @@ const { PLAID_API_BASE, PLAID_CLIENT_ID, PLAID_SECRET, ANDROID_PACKAGE_NAME } =
     process.env;
 
 router.post("/create_link_token", async (req, res) => {
-    console.log("is it ?")
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: "Missing userId" });
     try {
@@ -49,7 +48,6 @@ router.post("/exchange_public_token", async (req, res) => {
 
 router.post("/get_transactions", async (req, res) => {
     const { access_token, userId } = req.body;
-console.log("is it coming here?")
     if (!access_token) {
         return res.status(400).json({ error: "Missing access_token" });
     }
