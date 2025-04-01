@@ -1,6 +1,7 @@
 const express = require("express");
 const { db } = require("../../firebaseConfig");
 const { CATEGORY_LIST } = require("../constants/constant");
+const { safeAmount } = require("../helper/safeAmount");
 
 const router = express.Router();
 
@@ -61,7 +62,7 @@ router.post("/", async (req, res) => {
 
     transactionsSnapshot.forEach(doc => {
       const txn = doc.data();
-      categoryTotals[txn.category] += parseFloat(txn.amount.toFixed(2));
+      categoryTotals[txn.category] += safeAmount(txn.amount);
     });
 
     await budgetRef.set({ userId, amount, title, fromDate, toDate });
@@ -69,7 +70,7 @@ router.post("/", async (req, res) => {
       userId, 
       budgetId,
       title,
-      amount: parseFloat(amount.toFixed(2)),
+      amount: safeAmount(amount),
       fromDate,
       toDate, 
       categoryTotals
@@ -142,12 +143,12 @@ router.patch("/:budgetId", async (req, res) => {
     const categoryTotals = Object.fromEntries(CATEGORY_LIST.map(cat => [cat, 0]));
     transactionsSnapshot.forEach(doc => {
       const txn = doc.data();
-      categoryTotals[txn.category] += parseFloat(txn.amount.toFixed(2));
+      categoryTotals[txn.category] += safeAmount(txn.amount);
     });
 
     await db.collection("budget-transactions").doc(budgetId).update({
       title: updates.title || oldBudget.title,
-      amount: parseFloat(updates.amount).toFixed(2) || parseFloat(oldBudget.amount).toFixed(2),
+      amount: safeAmount(updates.amount || oldBudget.amount),
       fromDate: updates.fromDate || oldBudget.fromDate,
       toDate: updates.toDate || oldBudget.toDate,
       categoryTotals

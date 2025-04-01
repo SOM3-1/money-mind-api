@@ -4,6 +4,7 @@ const { DateTime } = require("luxon");
 const router = express.Router();
 require("dotenv").config();
 const { db } = require("../../firebaseConfig");
+const { safeAmount } = require("../helper/safeAmount");
 
 const { PLAID_API_BASE, PLAID_CLIENT_ID, PLAID_SECRET, ANDROID_PACKAGE_NAME } =
     process.env;
@@ -66,7 +67,7 @@ router.post("/get_transactions", async (req, res) => {
         const transactions = transactionsResponse.data.transactions.map((tx) => ({
             userId,
             transactionId: tx.transaction_id,
-            amount: parseFloat(tx.amount.toFixed(2)),
+            amount: safeAmount(tx.amount),
             description: tx.name,
             date: tx.date,
             category: categorizeTransaction(tx),
