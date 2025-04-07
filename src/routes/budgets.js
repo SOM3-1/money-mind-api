@@ -1,6 +1,7 @@
 const express = require("express");
 const { db } = require("../../firebaseConfig");
 const { CATEGORY_LIST } = require("../constants/constant");
+const { safeAmount } = require("../helper/safeAmount");
 
 const router = express.Router();
 
@@ -61,11 +62,19 @@ router.post("/", async (req, res) => {
 
     transactionsSnapshot.forEach(doc => {
       const txn = doc.data();
-      categoryTotals[txn.category] += txn.amount;
+      categoryTotals[txn.category] += safeAmount(txn.amount);
     });
 
     await budgetRef.set({ userId, amount, title, fromDate, toDate });
-    await db.collection("budget-transactions").doc(budgetId).set({ userId, budgetId, categoryTotals });
+    await db.collection("budget-transactions").doc(budgetId).set({
+      userId, 
+      budgetId,
+      title,
+      amount: safeAmount(amount),
+      fromDate,
+      toDate, 
+      categoryTotals
+    });
 
     res.status(201).json({ id: budgetId, amount, title, fromDate, toDate, categoryTotals });
   } catch (error) {
@@ -134,10 +143,16 @@ router.patch("/:budgetId", async (req, res) => {
     const categoryTotals = Object.fromEntries(CATEGORY_LIST.map(cat => [cat, 0]));
     transactionsSnapshot.forEach(doc => {
       const txn = doc.data();
-      categoryTotals[txn.category] += txn.amount;
+      categoryTotals[txn.category] += safeAmount(txn.amount);
     });
 
-    await db.collection("budget-transactions").doc(budgetId).update({ categoryTotals });
+    await db.collection("budget-transactions").doc(budgetId).update({
+      title: updates.title || oldBudget.title,
+      amount: safeAmount(updates.amount || oldBudget.amount),
+      fromDate: updates.fromDate || oldBudget.fromDate,
+      toDate: updates.toDate || oldBudget.toDate,
+      categoryTotals
+    });
 
     res.status(200).json({ message: "Budget updated successfully" });
   } catch (error) {

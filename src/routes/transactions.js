@@ -1,5 +1,6 @@
 const express = require("express");
 const { db } = require("../../firebaseConfig");
+const {safeAmount} =  require("../helper/safeAmount")
 
 const router = express.Router();
 
@@ -115,7 +116,7 @@ router.post("/", async (req, res) => {
 
             const transactionRef = db.collection("transactions").doc(transactionId);
 
-            batch.set(transactionRef, { userId, amount, description, date, category }, { merge: true });
+            batch.set(transactionRef, { userId, amount: safeAmount(amount), description, date, category }, { merge: true });
 
             const budgetsSnapshot = await db.collection("budgets")
                 .where("userId", "==", userId)
@@ -132,7 +133,8 @@ router.post("/", async (req, res) => {
                     budgetUpdates[budgetId] = budgetTxnDoc.exists ? budgetTxnDoc.data().categoryTotals : {};
                 }
 
-                budgetUpdates[budgetId][category] = (budgetUpdates[budgetId][category] || 0) + amount;
+                budgetUpdates[budgetId][category] = safeAmount(
+                    (budgetUpdates[budgetId][category] || 0) + amount);
             }
         }
 
@@ -193,6 +195,8 @@ router.patch("/:transactionId", async (req, res) => {
 
         const txnData = transactionDoc.data();
         await db.collection("transactions").doc(transactionId).update({ category });
+        const txnAmount = safeAmount(txnData.amount);
+
 
         // Update budget-transactions
         const budgetsSnapshot = await db.collection("budgets")
@@ -207,8 +211,8 @@ router.patch("/:transactionId", async (req, res) => {
             const budgetTxnDoc = await budgetTxnRef.get();
             if (budgetTxnDoc.exists) {
                 const categoryTotals = budgetTxnDoc.data().categoryTotals;
-                categoryTotals[txnData.category] -= txnData.amount;
-                categoryTotals[category] += txnData.amount;
+                categoryTotals[txnData.category] = safeAmount((categoryTotals[txnData.category] || 0) - txnAmount);
+                categoryTotals[category] = safeAmount((categoryTotals[category] || 0) + txnAmount);
                 await budgetTxnRef.update({ categoryTotals });
             }
         }
@@ -246,6 +250,7 @@ router.delete("/:transactionId", async (req, res) => {
         if (!transactionDoc.exists) return res.status(404).json({ error: "Transaction not found" });
 
         const { userId, amount, date, category } = transactionDoc.data();
+        const txnAmount = safeAmount(amount);
         await db.collection("transactions").doc(transactionId).delete();
 
         // Update budget-transactions
@@ -259,7 +264,7 @@ router.delete("/:transactionId", async (req, res) => {
             const budgetId = budgetsSnapshot.docs[0].id;
             const budgetTxnRef = db.collection("budget-transactions").doc(budgetId);
             const categoryTotals = (await budgetTxnRef.get()).data().categoryTotals;
-            categoryTotals[category] -= amount;
+            categoryTotals[category] = safeAmount((categoryTotals[category] || 0) - txnAmount);
             await budgetTxnRef.update({ categoryTotals });
         }
 
@@ -312,7 +317,7 @@ router.get("/", async (req, res) => {
         if (!userId) return res.status(400).json({ error: "Missing userId" });
 
         const transactionsSnapshot = await db.collection("transactions").where("userId", "==", userId).get();
-        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), amount: safeAmount(doc.data().amount) }));
 
         res.status(200).json(transactions);
     } catch (error) {
@@ -361,7 +366,7 @@ router.get("/by-budget", async (req, res) => {
             .where("date", "<=", toDate)
             .get();
 
-        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const transactions = transactionsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), amount: safeAmount(doc.data().amount)}));
 
         res.status(200).json(transactions);
     } catch (error) {

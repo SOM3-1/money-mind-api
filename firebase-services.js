@@ -22,12 +22,14 @@ const budgetsRoutes = require("./src/routes/budgets");
 const registerRoutes = require("./src/routes/register");
 const usersRoutes = require("./src/routes/users");
 const budgetTransactionsRoutes = require("./src/routes/budget-transactions");
+const plaidTransactionsRoutes = require("./src/routes/plaid")
 
 app.use("/transactions", transactionsRoutes);
 app.use("/budgets", budgetsRoutes);
 app.use("/register", registerRoutes);
 app.use("/users", usersRoutes);
 app.use("/budget-transactions", budgetTransactionsRoutes);
+app.use("/plaid", plaidTransactionsRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
